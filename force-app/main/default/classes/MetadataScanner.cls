@@ -153,6 +153,49 @@ public with sharing class MetadataScanner {
     }
 
     /**
+     * @description Retrieves connected apps via the Tooling API's ConnectedApplication object.
+     * NOTE: ConnectedApplication is officially documented by Salesforce as "For internal use
+     * only" — it has no published field reference the way CustomField, Flow, or ApexClass do.
+     * We deliberately query only Id and Name (the two fields virtually certain to exist on any
+     * queryable object) and wrap the call in a try/catch so a future Salesforce change to this
+     * undocumented object degrades gracefully instead of breaking the whole metadata scan.
+     * OAuth scope data (needed for Phase 5's Security Readiness Module) is intentionally NOT
+     * pulled here — that will be sourced from a properly documented API when we get to Phase 5.
+     * @return List of Map<String,Object> representing raw ConnectedApplication records, or an
+     * empty list if the query fails.
+     */
+    public static List<Object> getConnectedApps() {
+        try {
+            String query = 'SELECT Id, Name FROM ConnectedApplication';
+            return queryToolingAPI(query);
+        } catch (Exception e) {
+            System.debug('getConnectedApps() failed - ConnectedApplication may be unavailable: ' + e.getMessage());
+            return new List<Object>();
+        }
+    }
+
+    /**
+     * @description Retrieves inventory of all page layouts in the org via Tooling API,
+     * including which object each layout belongs to (TableEnumOrId is the join key back
+     * to CustomField.TableEnumOrId). This is the first data source FieldUsageAnalyzer
+     * (Phase 2.2) will use to determine whether a field appears on any layout.
+     *
+     * NOTE: Layout's Metadata field (the actual field placements) and FullName are
+     * intentionally NOT pulled here. The Tooling API only allows querying those fields
+     * when the result set is a single record — they cannot be bulk-queried across many
+     * layouts at once. Per-layout Metadata retrieval happens later, inside
+     * FieldUsageAnalyzer, one layout at a time.
+     * @return List of Map<String,Object> representing raw Layout Tooling API records.
+     */
+    public static List<Object> getLayouts() {
+        String query = 'SELECT Id, Name, TableEnumOrId ' +
+            'FROM Layout ' +
+            'ORDER BY TableEnumOrId, Name';
+
+        return queryToolingAPI(query);
+    }
+
+    /**
      * @description Custom exception thrown when a Tooling API callout fails
      * (non-200 status) during a scan operation.
      */
