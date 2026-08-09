@@ -1,11 +1,11 @@
-List<Object> flows = MetadataScanner.getFlows();
-System.debug('FLOW VERSION COUNT: ' + flows.size());
-if (!flows.isEmpty()) {
-    System.debug('FIRST FLOW: ' + JSON.serialize(flows[0]));
+List<Object> classes = MetadataScanner.getApexClasses();
+System.debug('APEX CLASS COUNT: ' + classes.size());
+if (!classes.isEmpty()) {
+    System.debug('FIRST CLASS: ' + JSON.serialize(classes[0]));
 }
 
-List<Object> flowDefs = MetadataScanner.getFlowDefinitions();
-System.debug('FLOW DEFINITION COUNT: ' + flowDefs.size());
-if (!flowDefs.isEmpty()) {
-    System.debug('FIRST FLOW DEF: ' + JSON.serialize(flowDefs[0]));
+List<Object> coverage = MetadataScanner.getApexCodeCoverage();
+System.debug('COVERAGE RECORD COUNT: ' + coverage.size());
+if (!coverage.isEmpty()) {
+    System.debug('FIRST COVERAGE: ' + JSON.serialize(coverage[0]));
 }

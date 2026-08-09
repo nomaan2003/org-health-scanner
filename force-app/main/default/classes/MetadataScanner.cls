@@ -121,6 +121,38 @@ public with sharing class MetadataScanner {
     }
 
     /**
+     * @description Retrieves inventory of all Apex classes in the org via Tooling API,
+     * including compile status, length, and audit dates. Does not include coverage
+     * percentages — use getApexCodeCoverage() alongside this and join in Apex by Id,
+     * since coverage lives on a separate Tooling object (ApexCodeCoverageAggregate).
+     * @return List of Map<String,Object> representing raw ApexClass Tooling API records.
+     */
+    public static List<Object> getApexClasses() {
+        String query = 'SELECT Id, Name, ApiVersion, LengthWithoutComments, Status, ' +
+            'IsValid, NamespacePrefix, CreatedDate, LastModifiedDate ' +
+            'FROM ApexClass ' +
+            'ORDER BY Name';
+
+        return queryToolingAPI(query);
+    }
+
+    /**
+     * @description Retrieves org-wide aggregate code coverage per Apex class/trigger via
+     * Tooling API. This is the summarized coverage (used for "below 75%" checks in
+     * ApexHealthAnalyzer, Phase 2.4) — not the same as ApexCodeCoverage, which is granular
+     * per-test-run detail and not what we want for a health score.
+     * @return List of Map<String,Object> representing raw ApexCodeCoverageAggregate records.
+     */
+    public static List<Object> getApexCodeCoverage() {
+        String query = 'SELECT ApexClassOrTriggerId, ApexClassOrTrigger.Name, ' +
+            'NumLinesCovered, NumLinesUncovered ' +
+            'FROM ApexCodeCoverageAggregate ' +
+            'ORDER BY ApexClassOrTrigger.Name';
+
+        return queryToolingAPI(query);
+    }
+
+    /**
      * @description Custom exception thrown when a Tooling API callout fails
      * (non-200 status) during a scan operation.
      */
