@@ -54,8 +54,12 @@ public with sharing class MetadataScanner {
             if (!done) {
                 String nextRecordsUrl = (String) parsed.get('nextRecordsUrl');
                 if (String.isBlank(nextRecordsUrl)) {
+                    // Defensive: if Salesforce says not done but gives no next URL, stop instead of looping forever
                     done = true;
                 } else {
+                    // nextRecordsUrl comes back as an absolute org path like
+                    // /services/data/v61.0/tooling/query/01gXX-2000
+                    // We need to re-prefix it with our Named Credential.
                     endpoint = NAMED_CREDENTIAL + nextRecordsUrl;
                 }
             }
@@ -81,6 +85,37 @@ public with sharing class MetadataScanner {
             'ManageableState, CreatedDate, LastModifiedDate ' +
             'FROM CustomField ' +
             'ORDER BY TableEnumOrId, DeveloperName';
+
+        return queryToolingAPI(query);
+    }
+
+    /**
+     * @description Retrieves all Flow versions (active and inactive) in the org via Tooling API.
+     * Each record represents one specific version of a flow. Use getFlowDefinitions() alongside
+     * this to know which version is currently active per flow (DefinitionId links the two).
+     * @return List of Map<String,Object> representing raw Flow Tooling API records.
+     */
+    public static List<Object> getFlows() {
+        String query = 'SELECT Id, MasterLabel, DefinitionId, VersionNumber, Status, ' +
+            'ProcessType, ManageableState, Description ' +
+            'FROM Flow ' +
+            'ORDER BY DefinitionId, VersionNumber';
+
+        return queryToolingAPI(query);
+    }
+
+    /**
+     * @description Retrieves the "parent" record for each distinct flow (one per unique flow
+     * API name), including which version is currently active vs. merely the latest saved
+     * version. This is what lets FlowHealthAnalyzer (Phase 2.3) tell an active flow apart
+     * from an old draft or superseded version of the same flow.
+     * @return List of Map<String,Object> representing raw FlowDefinition Tooling API records.
+     */
+    public static List<Object> getFlowDefinitions() {
+        String query = 'SELECT Id, DeveloperName, MasterLabel, ActiveVersionId, ' +
+            'LatestVersionId, ManageableState, NamespacePrefix ' +
+            'FROM FlowDefinition ' +
+            'ORDER BY DeveloperName';
 
         return queryToolingAPI(query);
     }
