@@ -1,11 +1,12 @@
-List<Object> connectedApps = MetadataScanner.getConnectedApps();
-System.debug('CONNECTED APP COUNT: ' + connectedApps.size());
-if (!connectedApps.isEmpty()) {
-    System.debug('FIRST CONNECTED APP: ' + JSON.serialize(connectedApps[0]));
-}
+Integer totalCount = [SELECT COUNT() FROM Field_Usage_Signal__c];
+System.debug('TOTAL SIGNAL RECORDS: ' + totalCount);
 
-List<Object> layouts = MetadataScanner.getLayouts();
-System.debug('LAYOUT COUNT: ' + layouts.size());
-if (!layouts.isEmpty()) {
-    System.debug('FIRST LAYOUT: ' + JSON.serialize(layouts[0]));
+List<Field_Usage_Signal__c> sample = [
+    SELECT Table_Enum_Or_Id__c, Field_Developer_Name__c, Referenced_In_Layout__c
+    FROM Field_Usage_Signal__c
+    ORDER BY Table_Enum_Or_Id__c
+    LIMIT 10
+];
+for (Field_Usage_Signal__c s : sample) {
+    System.debug(s.Table_Enum_Or_Id__c + '.' + s.Field_Developer_Name__c + ' -> ' + s.Referenced_In_Layout__c);
 }
