@@ -194,6 +194,18 @@ public with sharing class MetadataScanner {
 
         return queryToolingAPI(query);
     }
+    /**
+ * @description Retrieves the full source body of every Apex class via Tooling API.
+ * Unlike Layout.Metadata or CustomField's nested metadata, ApexClass.Body has no
+ * single-record-query restriction, so this is safe to bulk-query like the other
+ * MetadataScanner methods. Used by CodeUsageAnalyzer (Phase 2.2) to text-search for
+ * field API name references.
+ * @return List of Map<String,Object> representing raw ApexClass records with Body included.
+ */
+public static List<Object> getApexClassBodies() {
+    String query = 'SELECT Id, Name, Body FROM ApexClass ORDER BY Name';
+    return queryToolingAPI(query);
+}
 
     /**
      * @description Custom exception thrown when a Tooling API callout fails
