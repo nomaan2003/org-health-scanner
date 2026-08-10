@@ -125,18 +125,19 @@ public FieldUsageAnalyzer(List<Object> remainingLayouts, Set<String> fieldsFound
         List<Field_Usage_Signal__c> recordsToInsert = new List<Field_Usage_Signal__c>();
         for (String key : fieldsFoundInLayouts) {
             List<String> parts = key.split('\\.', 2);
-            Field_Usage_Signal__c signal = new Field_Usage_Signal__c(
-                Table_Enum_Or_Id__c = parts[0],
-                Field_Developer_Name__c = parts.size() > 1 ? parts[1] : '',
-                Referenced_In_Layout__c = true,
-                Scan_Batch_Id__c = scanBatchId
-            );
-            recordsToInsert.add(signal);
+           Field_Usage_Signal__c signal = new Field_Usage_Signal__c(
+    Field_Key__c = parts[0] + '.' + (parts.size() > 1 ? parts[1] : ''),
+    Table_Enum_Or_Id__c = parts[0],
+    Field_Developer_Name__c = parts.size() > 1 ? parts[1] : '',
+    Referenced_In_Layout__c = true,
+    Scan_Batch_Id__c = scanBatchId
+);
+recordsToInsert.add(signal);
         }
 
-        if (!recordsToInsert.isEmpty()) {
-            insert recordsToInsert;
-        }
+       if (!recordsToInsert.isEmpty()) {
+    upsert recordsToInsert Field_Key__c;
+}
         System.debug('FieldUsageAnalyzer scan ' + scanBatchId + ' complete. Fields found on layouts: ' + recordsToInsert.size());
     }
 }
