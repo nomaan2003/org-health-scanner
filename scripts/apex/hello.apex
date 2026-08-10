@@ -1,16 +1,12 @@
-FieldUsageAnalyzer.computeUsageVerdicts();
+List<FlowHealthAnalyzer.FlowFinding> findings = FlowHealthAnalyzer.runFlowHealthScan();
+System.debug('TOTAL FINDINGS: ' + findings.size());
 
-Integer likelyUnusedCount = [SELECT COUNT() FROM Field_Usage_Signal__c WHERE Is_Likely_Unused__c = true];
-Integer likelyUsedCount = [SELECT COUNT() FROM Field_Usage_Signal__c WHERE Is_Likely_Unused__c = false];
-System.debug('LIKELY UNUSED: ' + likelyUnusedCount);
-System.debug('LIKELY USED: ' + likelyUsedCount);
-
-List<Field_Usage_Signal__c> unusedSample = [
-    SELECT Field_Key__c, Referenced_In__c, Is_Likely_Unused__c
-    FROM Field_Usage_Signal__c
-    WHERE Is_Likely_Unused__c = true
-    LIMIT 5
-];
-for (Field_Usage_Signal__c s : unusedSample) {
-    System.debug(s.Field_Key__c + ' -> UNUSED (referenced in: ' + s.Referenced_In__c + ')');
+Integer byType = 0;
+Map<String, Integer> countByType = new Map<String, Integer>();
+for (FlowHealthAnalyzer.FlowFinding f : findings) {
+    Integer current = countByType.containsKey(f.findingType) ? countByType.get(f.findingType) : 0;
+    countByType.put(f.findingType, current + 1);
+}
+for (String type : countByType.keySet()) {
+    System.debug(type + ': ' + countByType.get(type));
 }
