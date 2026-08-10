@@ -67,6 +67,47 @@ public FieldUsageAnalyzer(List<Object> remainingLayouts, Set<String> fieldsFound
     persistResults();
 }
     }
+    /**
+ * @description Phase 2.2 final step - computes the isLikelyUnused verdict for every field
+ * by combining the 3 signals already gathered on Field_Usage_Signal__c (Layout, Data
+ * presence, Code references). A field is considered likely unused only if ALL THREE
+ * signals are negative - referenced nowhere, on no layout, and holding no data anywhere.
+ * Updates the existing rows in place (they already exist from the 3 analyzer scans,
+ * so this is a plain update, not an upsert).
+ */
+public static void computeUsageVerdicts() {
+    List<Field_Usage_Signal__c> allSignals = [
+        SELECT Id, Referenced_In_Layout__c, Has_Data__c, Referenced_In_Code__c
+        FROM Field_Usage_Signal__c
+    ];
+
+    List<Field_Usage_Signal__c> toUpdate = new List<Field_Usage_Signal__c>();
+
+    for (Field_Usage_Signal__c signal : allSignals) {
+        Boolean inLayout = signal.Referenced_In_Layout__c == true;
+        Boolean hasData = signal.Has_Data__c == true;
+        Boolean inCode = signal.Referenced_In_Code__c == true;
+
+        List<String> referencedIn = new List<String>();
+        if (inLayout) referencedIn.add('Layout');
+        if (hasData) referencedIn.add('Data');
+        if (inCode) referencedIn.add('Code');
+
+        Boolean isLikelyUnused = !inLayout && !hasData && !inCode;
+
+        toUpdate.add(new Field_Usage_Signal__c(
+            Id = signal.Id,
+            Is_Likely_Unused__c = isLikelyUnused,
+            Referenced_In__c = String.join(referencedIn, ', ')
+        ));
+    }
+
+    if (!toUpdate.isEmpty()) {
+        update toUpdate;
+    }
+
+    System.debug('computeUsageVerdicts complete. Rows processed: ' + toUpdate.size());
+}
 
     /**
      * @description Single-record Tooling API query to pull Layout.Metadata, then parses

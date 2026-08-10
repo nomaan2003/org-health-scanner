@@ -1,10 +1,16 @@
-List<Field_Usage_Signal__c> multiSignal = [
-    SELECT Field_Key__c, Referenced_In_Layout__c, Has_Data__c, Referenced_In_Code__c
+FieldUsageAnalyzer.computeUsageVerdicts();
+
+Integer likelyUnusedCount = [SELECT COUNT() FROM Field_Usage_Signal__c WHERE Is_Likely_Unused__c = true];
+Integer likelyUsedCount = [SELECT COUNT() FROM Field_Usage_Signal__c WHERE Is_Likely_Unused__c = false];
+System.debug('LIKELY UNUSED: ' + likelyUnusedCount);
+System.debug('LIKELY USED: ' + likelyUsedCount);
+
+List<Field_Usage_Signal__c> unusedSample = [
+    SELECT Field_Key__c, Referenced_In__c, Is_Likely_Unused__c
     FROM Field_Usage_Signal__c
-    WHERE Referenced_In_Layout__c = true AND Referenced_In_Code__c = true
+    WHERE Is_Likely_Unused__c = true
     LIMIT 5
 ];
-System.debug('FIELDS WITH BOTH LAYOUT AND CODE SIGNALS: ' + multiSignal.size());
-for (Field_Usage_Signal__c s : multiSignal) {
-    System.debug(s.Field_Key__c + ' | Layout: ' + s.Referenced_In_Layout__c + ' | Data: ' + s.Has_Data__c + ' | Code: ' + s.Referenced_In_Code__c);
+for (Field_Usage_Signal__c s : unusedSample) {
+    System.debug(s.Field_Key__c + ' -> UNUSED (referenced in: ' + s.Referenced_In__c + ')');
 }
