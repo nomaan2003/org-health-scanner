@@ -49,7 +49,7 @@ public with sharing class OrgScanOrchestrator {
 
         scan.Status__c = 'Completed';
         scan.Total_Findings__c = allFindings.size();
-        scan.Health_Score__c = calculateHealthScore(allFindings.size());
+       scan.Health_Score__c = HealthScoreCalculator.calculateScoreFromSeverities(allFindings);
         update scan;
 
         return scan.Id;
