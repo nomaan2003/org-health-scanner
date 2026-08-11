@@ -1,19 +1,11 @@
-List<ApexHealthAnalyzer.ApexFinding> findings = ApexHealthAnalyzer.runApexHealthScan();
-System.debug('TOTAL FINDINGS: ' + findings.size());
+Org_Scan__c scan = [SELECT Status__c, Total_Findings__c, Health_Score__c FROM Org_Scan__c ORDER BY CreatedDate DESC LIMIT 1];
+System.debug('SCAN STATUS: ' + scan.Status__c + ' | TOTAL: ' + scan.Total_Findings__c + ' | HEALTH SCORE: ' + scan.Health_Score__c);
 
-Map<String, Integer> countByType = new Map<String, Integer>();
-for (ApexHealthAnalyzer.ApexFinding f : findings) {
-    Integer current = countByType.containsKey(f.findingType) ? countByType.get(f.findingType) : 0;
-    countByType.put(f.findingType, current + 1);
-}
-for (String type : countByType.keySet()) {
-    System.debug(type + ': ' + countByType.get(type));
-}
-
-// Sample a few of each type
-Integer shown = 0;
-for (ApexHealthAnalyzer.ApexFinding f : findings) {
-    if (shown >= 8) break;
-    System.debug(f.findingType + ' | ' + f.className + ' | ' + f.description);
-    shown++;
+List<AggregateResult> byCategory = [
+    SELECT Category__c, COUNT(Id) cnt
+    FROM Debt_Finding__c
+    GROUP BY Category__c
+];
+for (AggregateResult ar : byCategory) {
+    System.debug(ar.get('Category__c') + ': ' + ar.get('cnt'));
 }
