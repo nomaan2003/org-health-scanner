@@ -1,11 +1,8 @@
-Org_Scan__c scan = [SELECT Status__c, Total_Findings__c, Health_Score__c FROM Org_Scan__c ORDER BY CreatedDate DESC LIMIT 1];
-System.debug('SCAN STATUS: ' + scan.Status__c + ' | TOTAL: ' + scan.Total_Findings__c + ' | HEALTH SCORE: ' + scan.Health_Score__c);
+Id scanId = OrgScanOrchestrator.runScan();
+System.debug('Scan Id: ' + scanId);
 
-List<AggregateResult> bySeverity = [
-    SELECT Severity__c, COUNT(Id) cnt
-    FROM Debt_Finding__c
-    GROUP BY Severity__c
-];
-for (AggregateResult ar : bySeverity) {
-    System.debug(ar.get('Severity__c') + ': ' + ar.get('cnt'));
-}
+Org_Scan__c scan = [SELECT Health_Score__c, Total_Findings__c, Status__c FROM Org_Scan__c WHERE Id = :scanId];
+System.debug('Status: ' + scan.Status__c + ', Total: ' + scan.Total_Findings__c + ', Score: ' + scan.Health_Score__c);
+
+Integer securityCount = [SELECT COUNT() FROM Debt_Finding__c WHERE Org_Scan__c = :scanId AND Category__c = 'Security Gap'];
+System.debug('Security Gap findings this scan: ' + securityCount);

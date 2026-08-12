@@ -1,22 +1,5 @@
-/**
- * @description Phase 2.5 - ties together the 4 Phase 2 analyzers into one scan run,
- * writing results into Debt_Finding__c under a single Org_Scan__c record.
- *
- * SCOPING NOTE: FieldUsageAnalyzer's Layout-usage and Data-presence signals are gathered
- * via async Queueable chains (Phase 2.2) and can't be synchronously awaited from here.
- * This orchestrator runs the 3 fully-synchronous pieces (Code-usage, Flow health, Apex
- * health) plus computeUsageVerdicts() - which reads whatever Layout/Data-presence signals
- * are already sitting in Field_Usage_Signal__c from the most recent run of those scans.
- * A future refinement could have the last chained Queueable job in each of those scans
- * kick off the rest of the orchestration automatically.
- */
 public with sharing class OrgScanOrchestrator {
 
-    /**
-     * @description Entry point. Creates an Org_Scan__c record, runs all synchronous
-     * analyzers, writes findings, and finalizes the scan record.
-     * @return The Id of the created Org_Scan__c record.
-     */
    public static Id runScan() {
     List<Debt_Finding__c> allFindings = new List<Debt_Finding__c>();
 
@@ -24,6 +7,13 @@ public with sharing class OrgScanOrchestrator {
         // Callout-only analyzers first, in any order among themselves
         List<FlowHealthAnalyzer.FlowFinding> flowFindings = FlowHealthAnalyzer.runFlowHealthScan();
         List<ApexHealthAnalyzer.ApexFinding> apexFindings = ApexHealthAnalyzer.runApexHealthScan();
+
+        // SecurityAnalyzer's checks: check1 and check3 are pure SOQL (no callouts),
+        // but check2 (API/IP restriction check) makes Tooling API callouts - so the
+        // whole SecurityAnalyzer batch runs here, in the callout phase.
+        List<SecurityAnalyzer.SecurityFinding> overPrivilegedFindings = SecurityAnalyzer.checkOverPrivilegedUsers();
+        List<SecurityAnalyzer.SecurityFinding> apiIpFindings = SecurityAnalyzer.checkApiAccessWithoutIpRestrictions();
+        List<SecurityAnalyzer.SecurityFinding> dormantFindings = SecurityAnalyzer.checkDormantHighPrivilegeAccounts();
 
         // CodeUsageAnalyzer runs LAST among callout-based work, since it ends with its
         // own upsert - nothing after this point in the callout chain can make callouts.
@@ -42,6 +32,9 @@ public with sharing class OrgScanOrchestrator {
         allFindings.addAll(buildFieldUsageFindings(scan.Id));
         allFindings.addAll(buildFlowFindings(scan.Id, flowFindings));
         allFindings.addAll(buildApexFindings(scan.Id, apexFindings));
+        allFindings.addAll(buildSecurityFindings(scan.Id, overPrivilegedFindings));
+        allFindings.addAll(buildSecurityFindings(scan.Id, apiIpFindings));
+        allFindings.addAll(buildSecurityFindings(scan.Id, dormantFindings));
 
         if (!allFindings.isEmpty()) {
             insert allFindings;
@@ -49,7 +42,7 @@ public with sharing class OrgScanOrchestrator {
 
         scan.Status__c = 'Completed';
         scan.Total_Findings__c = allFindings.size();
-       scan.Health_Score__c = HealthScoreCalculator.calculateScoreFromSeverities(allFindings);
+        scan.Health_Score__c = HealthScoreCalculator.calculateScoreFromSeverities(allFindings);
         update scan;
 
         return scan.Id;
@@ -60,10 +53,6 @@ public with sharing class OrgScanOrchestrator {
     }
 }
 
-    /**
-     * @description Converts Field_Usage_Signal__c rows flagged Is_Likely_Unused__c into
-     * Debt_Finding__c records.
-     */
     private static List<Debt_Finding__c> buildFieldUsageFindings(Id scanId) {
         List<Debt_Finding__c> findings = new List<Debt_Finding__c>();
 
@@ -89,16 +78,13 @@ public with sharing class OrgScanOrchestrator {
         return findings;
     }
 
-    /**
-     * @description Converts FlowHealthAnalyzer.FlowFinding results into Debt_Finding__c.
-     */
     private static List<Debt_Finding__c> buildFlowFindings(Id scanId, List<FlowHealthAnalyzer.FlowFinding> flowFindings) {
         List<Debt_Finding__c> findings = new List<Debt_Finding__c>();
 
         for (FlowHealthAnalyzer.FlowFinding f : flowFindings) {
             String severity = f.findingType == 'Overlapping Trigger' ? 'High'
                 : f.findingType == 'Missing Fault Path' ? 'Medium'
-                : 'Low'; // Safe To Delete
+                : 'Low';
 
             findings.add(new Debt_Finding__c(
                 Org_Scan__c = scanId,
@@ -115,16 +101,13 @@ public with sharing class OrgScanOrchestrator {
         return findings;
     }
 
-    /**
-     * @description Converts ApexHealthAnalyzer.ApexFinding results into Debt_Finding__c.
-     */
     private static List<Debt_Finding__c> buildApexFindings(Id scanId, List<ApexHealthAnalyzer.ApexFinding> apexFindings) {
         List<Debt_Finding__c> findings = new List<Debt_Finding__c>();
 
         for (ApexHealthAnalyzer.ApexFinding f : apexFindings) {
             String category = f.findingType == 'Low Coverage' ? 'Low Test Coverage'
                 : f.findingType == 'Hardcoded Id' ? 'Hardcoded Id'
-                : 'Security Gap'; // SOQL In Loop - closest available category, approximation
+                : 'Security Gap';
 
             String severity = f.findingType == 'Low Coverage' ? 'Medium' : 'High';
 
@@ -144,12 +127,25 @@ public with sharing class OrgScanOrchestrator {
     }
 
     /**
-     * @description Simple health score: starts at 100, deducts 1 point per finding,
-     * floored at 0. A placeholder formula - Phase 3's HealthScoreCalculator will likely
-     * replace this with something that weights severity.
+     * @description Converts SecurityAnalyzer.SecurityFinding results into Debt_Finding__c
+     * under Category__c = 'Security Gap'. Shared by all 3 SecurityAnalyzer checks.
      */
-    private static Decimal calculateHealthScore(Integer findingCount) {
-        Decimal score = 100 - findingCount;
-        return score < 0 ? 0 : score;
+    private static List<Debt_Finding__c> buildSecurityFindings(Id scanId, List<SecurityAnalyzer.SecurityFinding> securityFindings) {
+        List<Debt_Finding__c> findings = new List<Debt_Finding__c>();
+
+        for (SecurityAnalyzer.SecurityFinding f : securityFindings) {
+            findings.add(new Debt_Finding__c(
+                Org_Scan__c = scanId,
+                Category__c = 'Security Gap',
+                Severity__c = f.severity,
+                Component_Type__c = 'User',
+                Component_Name__c = f.userName != null ? f.userName : f.permissionSetOrProfileName,
+                Description__c = '[' + f.riskType + '] ' + f.description,
+                Status__c = 'Open',
+                AutoFixable__c = false
+            ));
+        }
+
+        return findings;
     }
 }
