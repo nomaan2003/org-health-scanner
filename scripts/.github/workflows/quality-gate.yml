@@ -1,0 +1,37 @@
+name: Org Health Quality Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Minimum health score to pass'
+        required: false
+        default: '50'
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Salesforce CLI
+        run: npm install --global @salesforce/cli
+
+      - name: Authenticate to Salesforce
+        run: |
+          echo "${{ secrets.SFDX_AUTH_URL }}" > authFile.txt
+          sf org login sfdx-url --sfdx-url-file authFile.txt --alias ci --set-default
+          rm authFile.txt
+
+      - name: Deploy latest code
+        run: sf project deploy start --source-dir force-app/main/default/classes --target-org ci
+
+      - name: Run Quality Gate
+        run: |
+          chmod +x scripts/quality-gate.sh
+          ./scripts/quality-gate.sh "${{ github.event.inputs.threshold || '50' }}" ci
