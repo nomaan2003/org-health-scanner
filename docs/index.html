@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Org Health Scanner — Live Demo</title>
+<style>
+  :root {
+    --critical: #c0392b;
+    --high: #e67e22;
+    --medium: #f1c40f;
+    --low: #95a5a6;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --border: #e1e5e9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 0;
+  }
+  header {
+    background: #16325c;
+    color: white;
+    padding: 24px 32px;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; opacity: 0.8; font-size: 14px; }
+  .banner {
+    background: #fff3cd;
+    color: #664d03;
+    padding: 10px 32px;
+    font-size: 13px;
+    border-bottom: 1px solid #ffe69c;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  .summary {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    flex: 1;
+    min-width: 160px;
+  }
+  .card .label { font-size: 12px; color: #6b7785; text-transform: uppercase; letter-spacing: 0.04em; }
+  .card .value { font-size: 32px; font-weight: 700; margin-top: 4px; }
+  .score-low { color: var(--critical); }
+  .filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .filters select, .filters input {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  .filters input { flex: 1; min-width: 200px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: #f8f9fb; font-weight: 600; color: #445; position: sticky; top: 0; }
+  tr:hover { background: #fafbfc; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+  }
+  .badge.Critical { background: var(--critical); }
+  .badge.High { background: var(--high); }
+  .badge.Medium { background: #b7950b; }
+  .badge.Low { background: var(--low); }
+  .pagination {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .pagination button {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  .desc { color: #555; max-width: 420px; }
+  footer { text-align: center; padding: 24px; font-size: 12px; color: #8a97a5; }
+  footer a { color: #16325c; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔍 Org Health Scanner</h1>
+  <p>Read-only public demo — real scan results, no login required</p>
+</header>
+
+<div class="banner">
+  This is a static snapshot from a real Salesforce org scan. No live connection, no data entry, nothing to sign in to.
+</div>
+
+<main>
+  <div class="summary">
+    <div class="card">
+      <div class="label">Health Score</div>
+      <div class="value score-low" id="healthScore">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Findings</div>
+      <div class="value" id="totalFindings">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Scan Date</div>
+      <div class="value" style="font-size:16px; margin-top:10px;" id="scanDate">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Categories</div>
+      <div class="value" style="font-size:16px; margin-top:10px;" id="categoryCount">—</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <select id="categoryFilter"><option value="">All Categories</option></select>
+    <select id="severityFilter"><option value="">All Severities</option></select>
+    <input type="text" id="searchBox" placeholder="Search component name or description...">
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Severity</th>
+        <th>Component</th>
+        <th>Description</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="findingsBody"></tbody>
+  </table>
+
+  <div class="pagination">
+    <button id="prevBtn">← Prev</button>
+    <span id="pageInfo"></span>
+    <button id="nextBtn">Next →</button>
+  </div>
+</main>
+
+<footer>
+  Built with the Org Health Scanner project · <a href="https://github.com/nomaan2003/org-health-scanner" target="_blank">View source on GitHub</a>
+</footer>
+
+<script>
+const PAGE_SIZE = 25;
+let allFindings = [];
+let filteredFindings = [];
+let currentPage = 1;
+
+fetch('demo-data.json')
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('healthScore').textContent = data.healthScore.toFixed(1);
+    document.getElementById('totalFindings').textContent = data.totalFindings;
+    document.getElementById('scanDate').textContent = new Date(data.scanDate).toLocaleString();
+
+    allFindings = data.findings;
+
+    const categories = [...new Set(allFindings.map(f => f.Category__c))].sort();
+    const severities = [...new Set(allFindings.map(f => f.Severity__c))];
+    const severityOrder = ['Critical', 'High', 'Medium', 'Low'];
+    severities.sort((a, b) => severityOrder.indexOf(a) - severityOrder.indexOf(b));
+
+    document.getElementById('categoryCount').textContent = categories.length;
+
+    const catSelect = document.getElementById('categoryFilter');
+    categories.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      catSelect.appendChild(opt);
+    });
+
+    const sevSelect = document.getElementById('severityFilter');
+    severities.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      sevSelect.appendChild(opt);
+    });
+
+    applyFilters();
+  })
+  .catch(err => {
+    document.getElementById('findingsBody').innerHTML =
+      '<tr><td colspan="5" style="text-align:center; padding:40px; color:#c0392b;">Could not load demo-data.json — ' + err.message + '</td></tr>';
+  });
+
+function applyFilters() {
+  const cat = document.getElementById('categoryFilter').value;
+  const sev = document.getElementById('severityFilter').value;
+  const search = document.getElementById('searchBox').value.toLowerCase();
+
+  filteredFindings = allFindings.filter(f => {
+    if (cat && f.Category__c !== cat) return false;
+    if (sev && f.Severity__c !== sev) return false;
+    if (search) {
+      const haystack = (f.Component_Name__c + ' ' + f.Description__c).toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+
+  currentPage = 1;
+  renderPage();
+}
+
+function renderPage() {
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filteredFindings.slice(start, start + PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filteredFindings.length / PAGE_SIZE));
+
+  const tbody = document.getElementById('findingsBody');
+  tbody.innerHTML = pageItems.map(f => `
+    <tr>
+      <td>${escapeHtml(f.Category__c)}</td>
+      <td><span class="badge ${f.Severity__c}">${f.Severity__c}</span></td>
+      <td><code>${escapeHtml(f.Component_Name__c || '')}</code></td>
+      <td class="desc">${escapeHtml(f.Description__c || '')}</td>
+      <td>${escapeHtml(f.Status__c)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" style="text-align:center; padding:24px; color:#8a97a5;">No findings match these filters</td></tr>';
+
+  document.getElementById('pageInfo').textContent =
+    `Page ${currentPage} of ${totalPages} (${filteredFindings.length} findings)`;
+  document.getElementById('prevBtn').disabled = currentPage <= 1;
+  document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+document.getElementById('categoryFilter').addEventListener('change', applyFilters);
+document.getElementById('severityFilter').addEventListener('change', applyFilters);
+document.getElementById('searchBox').addEventListener('input', applyFilters);
+document.getElementById('prevBtn').addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderPage(); } });
+document.getElementById('nextBtn').addEventListener('click', () => {
+  const totalPages = Math.ceil(filteredFindings.length / PAGE_SIZE);
+  if (currentPage < totalPages) { currentPage++; renderPage(); }
+});
+</script>
+
+</body>
+</html>
