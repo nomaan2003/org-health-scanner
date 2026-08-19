@@ -18,6 +18,13 @@ public with sharing class OrgScanOrchestrator {
         // CodeUsageAnalyzer runs LAST among callout-based work, since it ends with its
         // own upsert - nothing after this point in the callout chain can make callouts.
         CodeUsageAnalyzer.runCodeUsageScan();
+        List<Debt_Finding__c> priorOpenFindings = [SELECT Id FROM Debt_Finding__c WHERE Status__c = 'Open'];
+for (Debt_Finding__c f : priorOpenFindings) {
+    f.Status__c = 'Superseded';
+}
+if (!priorOpenFindings.isEmpty()) {
+    update priorOpenFindings;
+}
 
         // DML-only from here on - safe after all callouts are done
         FieldUsageAnalyzer.computeUsageVerdicts();
@@ -40,11 +47,16 @@ public with sharing class OrgScanOrchestrator {
             insert allFindings;
         }
 
+               HealthScoreCalculator.SubScoreResult subScores = HealthScoreCalculator.calculateSubScores(allFindings);
+
         scan.Status__c = 'Completed';
         scan.Total_Findings__c = allFindings.size();
         scan.Health_Score__c = HealthScoreCalculator.calculateScoreFromSeverities(allFindings);
+        scan.Automation_Health__c = subScores.automationHealth;
+        scan.Data_Model_Health__c = subScores.dataModelHealth;
+        scan.Code_Health__c = subScores.codeHealth;
+        scan.Security_Health__c = subScores.securityHealth;
         update scan;
-
         return scan.Id;
 
     } catch (Exception e) {
@@ -71,7 +83,7 @@ public with sharing class OrgScanOrchestrator {
                 Component_Name__c = signal.Table_Enum_Or_Id__c + '.' + signal.Field_Developer_Name__c,
                 Description__c = 'Field appears unused: not referenced on any layout, holds no data, and not referenced in Apex or Flow code.',
                 Status__c = 'Open',
-                AutoFixable__c = false
+                AutoFixable__c = true
             ));
         }
 
@@ -111,7 +123,7 @@ public with sharing class OrgScanOrchestrator {
 
             String severity = f.findingType == 'Low Coverage' ? 'Medium' : 'High';
 
-            findings.add(new Debt_Finding__c(
+                       findings.add(new Debt_Finding__c(
                 Org_Scan__c = scanId,
                 Category__c = category,
                 Severity__c = severity,
@@ -119,7 +131,7 @@ public with sharing class OrgScanOrchestrator {
                 Component_Name__c = f.className,
                 Description__c = '[' + f.findingType + '] ' + f.description,
                 Status__c = 'Open',
-                AutoFixable__c = false
+                AutoFixable__c = (category == 'Hardcoded Id')
             ));
         }
 

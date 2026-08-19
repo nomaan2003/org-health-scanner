@@ -87,6 +87,67 @@ public static List<Remediation_Action__c> generateForHardcodedIds(List<Debt_Find
 
     return actions;
 }
+    public static List<Remediation_Action__c> generateForMissingFaultPaths(List<Debt_Finding__c> findings) {
+        List<Remediation_Action__c> actions = new List<Remediation_Action__c>();
+        List<Debt_Finding__c> findingsToUpdate = new List<Debt_Finding__c>();
+
+        for (Debt_Finding__c f : findings) {
+            if (f.Category__c != 'Orphaned Flow' || !f.Description__c.contains('Missing Fault Path')) {
+                continue;
+            }
+
+            Remediation_Action__c action = new Remediation_Action__c(
+                Debt_Finding__c = f.Id,
+                Action_Type__c = 'Add Fault Path',
+                Metadata_Diff__c = buildAddFaultPathDiff(f)
+            );
+            actions.add(action);
+
+            f.Status__c = 'Fix Proposed';
+            findingsToUpdate.add(f);
+        }
+
+        if (!actions.isEmpty()) {
+            insert actions;
+        }
+        if (!findingsToUpdate.isEmpty()) {
+            update findingsToUpdate;
+        }
+
+        return actions;
+    }
+        /**
+     * @description Entry point for Phase 4 - queries all Open, AutoFixable findings for a
+     * given scan and dispatches each to the right generator by category. Call this after
+     * a scan completes (manually for now; wired to the "Approve Fix" button in Phase 6).
+     */
+    public static List<Remediation_Action__c> generateAllRemediations(Id scanId) {
+        List<Debt_Finding__c> openFindings = [
+            SELECT Id, Category__c, Component_Name__c, Description__c, Status__c
+            FROM Debt_Finding__c
+            WHERE Org_Scan__c = :scanId AND Status__c = 'Open' AND AutoFixable__c = true
+        ];
+
+        List<Debt_Finding__c> unusedFields = new List<Debt_Finding__c>();
+        List<Debt_Finding__c> hardcodedIds = new List<Debt_Finding__c>();
+        List<Debt_Finding__c> orphanedFlows = new List<Debt_Finding__c>(); // covers both delete-version and fault-path
+
+        for (Debt_Finding__c f : openFindings) {
+            if (f.Category__c == 'Unused Field') unusedFields.add(f);
+            else if (f.Category__c == 'Hardcoded Id') hardcodedIds.add(f);
+            else if (f.Category__c == 'Orphaned Flow') orphanedFlows.add(f);
+        }
+
+        List<Remediation_Action__c> allActions = new List<Remediation_Action__c>();
+        if (!unusedFields.isEmpty()) allActions.addAll(generateForUnusedFields(unusedFields));
+        if (!hardcodedIds.isEmpty()) allActions.addAll(generateForHardcodedIds(hardcodedIds));
+        if (!orphanedFlows.isEmpty()) {
+            allActions.addAll(generateForMissingFaultPaths(orphanedFlows));
+            allActions.addAll(generateForOrphanedFlows(orphanedFlows));
+        }
+
+        return allActions;
+    }
 
 private static String buildReplaceHardcodedIdDiff(Debt_Finding__c f) {
     String componentName = f.Component_Name__c;
